@@ -16,8 +16,8 @@ const phasermsg = () => {
     }
 }   
 
-export default defineConfig({
-    base: './',
+export default defineConfig({    
+    base: '/town_dweller/',
     logLevel: 'warning',
     build: {
         rollupOptions: {
