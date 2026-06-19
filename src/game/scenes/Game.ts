@@ -5,6 +5,7 @@ import { QuantityModal } from '../entities/QuantityModal';
 import { TownBackground } from '../entities/TownBackground';
 import { HuntingBackground } from '../entities/HuntingBackground';
 import { WorkBackground } from '../entities/WorkBackground';
+import { TipModal } from '../entities/TipModal';
 
 enum GameState
 {
@@ -157,6 +158,11 @@ export class Game extends Scene
     private workProgressGraphics: Phaser.GameObjects.Graphics | null = null;
     private workModalContainer: Phaser.GameObjects.Container | null = null;
 
+    // Tips state
+    private tipsShown: Record<string, boolean> = {};
+    private activeTipModal: TipModal | null = null;
+    private hudHelpText: Phaser.GameObjects.Text;
+
     constructor ()
     {
         super('Game');
@@ -207,6 +213,7 @@ export class Game extends Scene
 
     update (_time: number, delta: number)
     {
+        if (this.activeTipModal) return;
         if (this.gameState !== GameState.Hunting || this.isCombatActionLocked) return;
 
         // Check for Auto-Potion usage
@@ -352,6 +359,8 @@ export class Game extends Scene
             {
                 this.addLogMessage('Working hard in the town... Do not click away or cancel.');
             }
+
+            this.showTipForCurrentState(false);
         }
 
         if (this.gameState === GameState.Town)
@@ -514,7 +523,7 @@ export class Game extends Scene
         this.hudBackground.lineBetween(0, 50, 1024, 50);
 
         // Level indicator
-        this.hudLevelText = this.add.text(35, 25, `⭐ Lvl ${this.player.level}`, {
+        this.hudLevelText = this.add.text(55, 25, `⭐ Lvl ${this.player.level}`, {
             fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
             fontSize: '18px',
             fontStyle: 'bold',
@@ -539,6 +548,20 @@ export class Game extends Scene
             color: '#10b981' // Emerald-500
         });
         this.hudPotionsText.setOrigin(1, 0.5);
+
+        // Help button
+        this.hudHelpText = this.add.text(15, 25, '?', {
+            fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            fontSize: '18px',
+            fontStyle: 'bold',
+            color: '#94a3b8',
+            backgroundColor: '#1e293b',
+            padding: { x: 6, y: 2 }
+        }).setOrigin(0.5, 0.5);
+        this.hudHelpText.setInteractive({ useHandCursor: true })
+            .on('pointerover', () => this.hudHelpText.setColor('#ffffff'))
+            .on('pointerout', () => this.hudHelpText.setColor('#94a3b8'))
+            .on('pointerdown', () => this.showTipForCurrentState(true));
 
         // Experience Bar graphics
         this.xpBarGraphics = this.add.graphics();
@@ -1323,26 +1346,12 @@ export class Game extends Scene
     {
         this.chatBoxBg.clear();
 
-        let w: number;
-        let h: number;
-        let x: number;
-        let boxY: number;
-
-        if (this.gameState === GameState.Hunting)
-        {
-            w = 800;
-            h = 204;
-            x = 512 - w / 2;
-            boxY = 645 - h / 2;
-        }
-        else
-        {
-            const margin = 10;
-            w = 1024 - margin * 2;
-            h = 180;
-            x = margin;
-            boxY = 768 - h - margin;
-        }
+        const margin = 10;
+        const w = 1024 - margin * 2;
+        const h = 180;
+        const x = margin;
+        const extraOffset = this.gameState === GameState.Town ? 4 : 0;
+        const boxY = 768 - h - margin + extraOffset;
 
         // Draw background: slate-950 with 0.85 opacity
         this.chatBoxBg.fillStyle(0x020617, 0.85);
@@ -1396,5 +1405,43 @@ export class Game extends Scene
             const visible = this.logMessages.slice(-visibleCount);
             this.msg_text.setText(visible.join('\n'));
         }
+    }
+
+    private getScreenKey(): string
+    {
+        switch (this.gameState)
+        {
+            case GameState.Town: return 'town';
+            case GameState.Hunting: return 'hunting';
+            case GameState.Working: return 'working';
+        }
+    }
+
+    private showTipForCurrentState(force: boolean): void
+    {
+        if (this.activeTipModal) return;
+
+        const key = this.getScreenKey();
+        if (!force && this.tipsShown[key]) return;
+
+        this.tipsShown[key] = true;
+
+        // Pause work tween while tip is open
+        if (this.workTween && this.workTween.isPlaying())
+        {
+            this.workTween.pause();
+        }
+
+        this.activeTipModal = new TipModal(this, key, () => {
+            this.activeTipModal = null;
+
+            // Resume work tween
+            if (this.workTween && this.workTween.isPaused())
+            {
+                this.workTween.resume();
+            }
+        });
+
+        this.activeTipModal.setDepth(1000);
     }
 }
