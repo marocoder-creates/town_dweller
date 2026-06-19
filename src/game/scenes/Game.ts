@@ -4,6 +4,7 @@ import { CombatCard } from '../entities/CombatCard';
 import { QuantityModal } from '../entities/QuantityModal';
 import { TownBackground } from '../entities/TownBackground';
 import { HuntingBackground } from '../entities/HuntingBackground';
+import { WorkBackground } from '../entities/WorkBackground';
 
 enum GameState
 {
@@ -117,6 +118,7 @@ export class Game extends Scene
     camera: Phaser.Cameras.Scene2D.Camera;
     private townBackground: TownBackground | null = null;
     private huntingBackground: HuntingBackground | null = null;
+    private workBackground: WorkBackground | null = null;
     msg_text : Phaser.GameObjects.Text;
     private chatBoxBg: Phaser.GameObjects.Graphics;
     private chatBoxHeader: Phaser.GameObjects.Text;
@@ -168,6 +170,8 @@ export class Game extends Scene
         this.townBackground = new TownBackground(this);
         this.huntingBackground = new HuntingBackground(this);
         this.huntingBackground.hide();
+        this.workBackground = new WorkBackground(this);
+        this.workBackground.setVisible(false);
         this.gameState = GameState.Town;
         this.player = new Entity('Player', 5, 5, 5, 5);
         
@@ -268,6 +272,11 @@ export class Game extends Scene
         {
             if (this.gameState === GameState.Hunting) { this.huntingBackground.show(); }
             else { this.huntingBackground.hide(); }
+        }
+        if (this.workBackground)
+        {
+            if (this.gameState === GameState.Working) { this.workBackground.show(); }
+            else { this.workBackground.hide(); }
         }
 
         // Clear existing buttons
@@ -812,6 +821,7 @@ export class Game extends Scene
         this.workXpReward = xpReward;
         this.workProgress = 0;
 
+        this.workBackground?.randomize();
         this.updateUI();
 
         // 1. Create Graphics object for progress bar
@@ -1352,6 +1362,11 @@ export class Game extends Scene
         this.chatBoxHeader.setPosition(x + 55, boxY + 20);
         this.msg_text.setPosition(x + 15, boxY + 38);
         this.msg_text.setStyle({ wordWrap: { width: w - 30 } });
+
+        // Re-render log with correct visible count for current state
+        const visibleCount = this.gameState === GameState.Hunting ? 10 : 8;
+        const visible = this.logMessages.slice(-visibleCount);
+        this.msg_text.setText(visible.join('\n'));
     }
 
     private addLogMessage(message: string)
@@ -1377,7 +1392,9 @@ export class Game extends Scene
         }
 
         if (this.msg_text) {
-            this.msg_text.setText(this.logMessages.join('\n'));
+            const visibleCount = this.gameState === GameState.Hunting ? 10 : 8;
+            const visible = this.logMessages.slice(-visibleCount);
+            this.msg_text.setText(visible.join('\n'));
         }
     }
 }
