@@ -2,6 +2,8 @@ import { Scene, Math as PhaserMath} from 'phaser';
 import { Button } from '../entities/Button';
 import { CombatCard } from '../entities/CombatCard';
 import { QuantityModal } from '../entities/QuantityModal';
+import { TownBackground } from '../entities/TownBackground';
+import { HuntingBackground } from '../entities/HuntingBackground';
 
 enum GameState
 {
@@ -88,12 +90,12 @@ class Entity {
 
 class VerticalLayoutManager implements ILayoutManager
 {
-    constructor(private startY: number = 450, private spacing: number = 80) {}
+    constructor(private startX: number = 512, private startY: number = 450, private spacing: number = 80) {}
 
     layout(buttons: Button[]): void
     {
         buttons.forEach((button, index) => {
-            button.setPosition(512, this.startY + index * this.spacing);
+            button.setPosition(this.startX, this.startY + index * this.spacing);
         });
     }
 }
@@ -113,7 +115,8 @@ class HorizontalLayoutManager implements ILayoutManager
 export class Game extends Scene
 {
     camera: Phaser.Cameras.Scene2D.Camera;
-    background: Phaser.GameObjects.Image;
+    private townBackground: TownBackground | null = null;
+    private huntingBackground: HuntingBackground | null = null;
     msg_text : Phaser.GameObjects.Text;
     private chatBoxBg: Phaser.GameObjects.Graphics;
     private chatBoxHeader: Phaser.GameObjects.Text;
@@ -160,10 +163,11 @@ export class Game extends Scene
     create ()
     {
         this.camera = this.cameras.main;
-        this.camera.setBackgroundColor(0x00ff00);
+        this.camera.setBackgroundColor(0x0f172a);
 
-        this.background = this.add.image(512, 384, 'background');
-        this.background.setAlpha(0.5);
+        this.townBackground = new TownBackground(this);
+        this.huntingBackground = new HuntingBackground(this);
+        this.huntingBackground.hide();
         this.gameState = GameState.Town;
         this.player = new Entity('Player', 5, 5, 5, 5);
         
@@ -254,6 +258,18 @@ export class Game extends Scene
 
     updateUI ()
     {
+        // Show/hide backgrounds based on state
+        if (this.townBackground)
+        {
+            if (this.gameState === GameState.Town) { this.townBackground.show(); }
+            else { this.townBackground.hide(); }
+        }
+        if (this.huntingBackground)
+        {
+            if (this.gameState === GameState.Hunting) { this.huntingBackground.show(); }
+            else { this.huntingBackground.hide(); }
+        }
+
         // Clear existing buttons
         this.buttons.forEach(button => button.destroy());
         this.buttons = [];
@@ -308,6 +324,16 @@ export class Game extends Scene
             if (this.gameState === GameState.Town)
             {
                 this.addLogMessage('Welcome to the town! Click the button to go hunting!');
+                if (this.player.hp < this.player.maxHp)
+                {
+                    this.player.hp = this.player.maxHp;
+                    this.addLogMessage(`You rest and fully heal. HP: ${this.player.hp}/${this.player.maxHp}`);
+                    if (this.playerCard)
+                    {
+                        this.playerCard.updateHp(this.player.hp, false);
+                        this.playerCard.flashHeal();
+                    }
+                }
             }
             else if (this.gameState === GameState.Hunting)
             {
@@ -348,7 +374,7 @@ export class Game extends Scene
 
     private createTownButtons ()
     {
-        this.layoutManager = new VerticalLayoutManager(260, 58);
+        this.layoutManager = new VerticalLayoutManager(140, 260, 70);
         
         const huntBtn = new Button(this, 0, 0, 'Go hunting!', () => {
             this.gameState = GameState.Hunting;
@@ -411,9 +437,13 @@ export class Game extends Scene
             this.buttons.push(buyPotionBtn);
         }
 
-        const healButton = new Button(this, 0, 0, 'Heal (+20 HP)', () => {
-            this.player.heal(20);
-            this.addLogMessage(`You rested and healed 20 HP! Your HP: ${this.player.hp}/${this.player.maxHp}`);
+        const healButton = new Button(this, 0, 0, 'Heal', () => {
+            if (this.player.hp >= this.player.maxHp) {
+                this.addLogMessage('Your health is already full!');
+                return;
+            }
+            this.player.hp = this.player.maxHp;
+            this.addLogMessage(`You rested and fully healed! HP: ${this.player.hp}/${this.player.maxHp}`);
             if (this.playerCard) {
                 this.playerCard.updateHp(this.player.hp);
                 this.playerCard.flashHeal();
@@ -1282,20 +1312,27 @@ export class Game extends Scene
     private updateChatBox()
     {
         this.chatBoxBg.clear();
-        
-        let w = 640;
-        let h = 230;
-        let y = 625;
-        
+
+        let w: number;
+        let h: number;
+        let x: number;
+        let boxY: number;
+
         if (this.gameState === GameState.Hunting)
         {
             w = 800;
             h = 204;
-            y = 645;
+            x = 512 - w / 2;
+            boxY = 645 - h / 2;
         }
-
-        const x = 512 - w / 2;
-        const boxY = y - h / 2;
+        else
+        {
+            const margin = 10;
+            w = 1024 - margin * 2;
+            h = 180;
+            x = margin;
+            boxY = 768 - h - margin;
+        }
 
         // Draw background: slate-950 with 0.85 opacity
         this.chatBoxBg.fillStyle(0x020617, 0.85);
